@@ -51,6 +51,7 @@
     "@vitejs/plugin-react": "4.4.1",
     "async": "3.2.6",
     "glob": "11.0.2",
+    "prettier": "3.3.3",
     "rollup-plugin-brotli": "3.1.0",
     "rollup-plugin-visualizer": "5.14.0",
     "strip-css-comments": "5.0.0",
@@ -60,8 +61,7 @@
     "vite-plugin-checker": "0.9.1",
     "workbox-build": "7.3.0",
     "workbox-core": "7.3.0",
-    "workbox-precaching": "7.3.0",
-    "prettier": "3.3.3"
+    "workbox-precaching": "7.3.0"
   },
   "vaadin": {
     "dependencies": {
@@ -124,7 +124,7 @@
       "workbox-core": "7.3.0",
       "workbox-precaching": "7.3.0"
     },
-    "hash": "1982aa8a5d5c8576a75c2b3a3e194f0581a4936264c7b051aa3da1034c8a86fd"
+    "hash": "c04dfaf1b731d76e3133ffaa6a3cd0b301da3900a8f8cefb4c4d0928b2be522e"
   },
   "overrides": {
     "@vaadin/bundles": "$@vaadin/bundles",

@@ -13,6 +13,7 @@
     <properties>
         <java.version>21</java.version>
         <vaadin.version>24.7.6</vaadin.version>
+        <aws.sdk.version>2.25.13</aws.sdk.version>
     </properties>
 
     <parent>
@@ -34,6 +35,11 @@
     </dependencyManagement>
 
     <dependencies>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>dynamodb</artifactId>
+            <version>${aws.sdk.version}</version>
+        </dependency>
         <dependency>
             <groupId>com.vaadin</groupId>
             <artifactId>vaadin</artifactId>
