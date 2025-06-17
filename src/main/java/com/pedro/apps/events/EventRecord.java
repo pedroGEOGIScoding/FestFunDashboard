@@ -93,4 +93,24 @@ public class EventRecord {
 	  this.type = type;
 	}
   }
+  
+  //Constructors
+  public EventRecord(String eventId) {
+	this.eventId = eventId;
+  }
+  
+  public EventRecord(String eventId, String operation, Data data) {
+	this.eventId = eventId;
+	this.operation = operation;
+	this.data = data;
+  }
+  
+  @Override
+  public String toString() {
+	return "EventRecord{" +
+		"eventId='" + eventId + '\'' +
+		", operation='" + operation + '\'' +
+		", data=" + data +
+		'}';
+  }
 }
