@@ -3,6 +3,7 @@ import { effect, signal } from '@vaadin/hilla-react-signals';
 import { AppLayout, DrawerToggle, Icon, SideNav, SideNavItem } from '@vaadin/react-components';
 import { Suspense, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router';
+import 'leaflet/dist/leaflet.css';
 
 const documentTitleSignal = signal('');
 effect(() => {

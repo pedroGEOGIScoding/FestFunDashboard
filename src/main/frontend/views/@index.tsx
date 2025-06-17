@@ -2,7 +2,7 @@ import { ViewConfig } from '@vaadin/hilla-file-router/types.js';
 
 export const config: ViewConfig = {
   menu: { order: 0, icon: 'line-awesome/svg/stopwatch-solid.svg' },
-  title: 'Dashboard',
+  title: 'Dashboard Event',
 };
 
 export default function DashboardView() {
