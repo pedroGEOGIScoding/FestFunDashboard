@@ -1,63 +1,56 @@
 import { ViewConfig } from '@vaadin/hilla-file-router/types.js';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 export const config: ViewConfig = {
   menu: { order: 1, icon: 'line-awesome/svg/map-marked-alt-solid.svg' },
   title: 'Tracking Map',
 };
 
+// Define basemap options
+const basemapOptions = [
+  { id: 'osm', name: 'OpenStreetMap', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' },
+  { id: 'satellite', name: 'Satellite (ESRI)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community' },
+  { id: 'googlesat', name: 'Google Satellite Hybrid', url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', attribution: 'Map data &copy; Google' }
+];
+
 const TrackingmapView: React.FC = function () {
-  const [mapStatus, setMapStatus] = useState('Initializing...');
+  const [latitude, setLatitude] = useState('41.368918');
+  const [longitude, setLongitude] = useState('2.147618');
+  const [selectedBasemap, setSelectedBasemap] = useState('osm');
+  const mapRef = useRef<any>(null);
+  const basemapLayersRef = useRef<{[key: string]: any}>({});
 
   useEffect(() => {
-    // Add a debug message to the UI
-    setMapStatus('Loading Leaflet...');
-
     // Load Leaflet CSS
     const cssLink = document.createElement('link');
     cssLink.rel = 'stylesheet';
     cssLink.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
     document.head.appendChild(cssLink);
 
-    // Create a debug helper that will add messages to the UI
-    const debug = (message: string) => {
-      console.log(`Map debug: ${message}`);
-      setMapStatus(prev => `${prev}\n${message}`);
-    };
-
     // Delay initialization to ensure DOM is ready
     const initTimer = setTimeout(() => {
-      debug('DOM should be ready, proceeding with map init');
-      
       // Load Leaflet JS
       const script = document.createElement('script');
       script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
       script.onload = () => {
-        debug('Leaflet JS loaded');
         initMap();
-      };
-      script.onerror = () => {
-        debug('Failed to load Leaflet JS');
       };
       document.head.appendChild(script);
     }, 1000);
 
     const initMap = () => {
-      debug('Initializing map');
       const mapContainer = document.getElementById('map-container');
       
       if (!mapContainer) {
-        debug('Error: Map container not found');
+        console.error('Map container not found');
         return;
       }
-      
-      debug(`Map container dimensions: ${mapContainer.clientWidth}x${mapContainer.clientHeight}`);
       
       try {
         // @ts-ignore
         const L = window.L;
         if (!L) {
-          debug('Error: Leaflet not found on window object');
+          console.error('Leaflet not found on window object');
           return;
         }
         
@@ -77,22 +70,32 @@ const TrackingmapView: React.FC = function () {
           zoomAnimation: false  // Disable animations for troubleshooting
         });
         
-        debug('Map object created');
+        // Store map reference for use outside this function
+        mapRef.current = map;
         
-        // Add tile layer
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
+        console.log('Map object created');
         
-        debug('Tile layer added');
+        // Create basemap layers
+        basemapOptions.forEach(option => {
+          const layer = L.tileLayer(option.url, {
+            attribution: option.attribution
+          });
+          basemapLayersRef.current[option.id] = layer;
+          
+          // Add the default layer to the map
+          if (option.id === selectedBasemap) {
+            layer.addTo(map);
+            console.log(`Added default basemap: ${option.name}`);
+          }
+        });
         
         // Force resize after a delay
         setTimeout(() => {
-          debug('Forcing map resize');
+          console.log('Forcing map resize');
           map.invalidateSize(true);
         }, 1000);
       } catch (error) {
-        debug(`Error initializing map: ${error instanceof Error ? error.message : String(error)}`);
+        console.error(`Error initializing map: ${error instanceof Error ? error.message : String(error)}`);
       }
     };
 
@@ -102,6 +105,59 @@ const TrackingmapView: React.FC = function () {
       document.head.removeChild(cssLink);
     };
   }, []);
+
+  // Effect to handle basemap changes
+  useEffect(() => {
+    if (!mapRef.current || !basemapLayersRef.current) return;
+    
+    try {
+      // Remove all basemap layers
+      Object.values(basemapLayersRef.current).forEach(layer => {
+        if (mapRef.current.hasLayer(layer)) {
+          mapRef.current.removeLayer(layer);
+        }
+      });
+      
+      // Add selected basemap
+      const selectedLayer = basemapLayersRef.current[selectedBasemap];
+      if (selectedLayer) {
+        selectedLayer.addTo(mapRef.current);
+      }
+    } catch (error) {
+      console.error(`Error changing basemap: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }, [selectedBasemap]);
+
+  const handleRelocate = () => {
+    if (!mapRef.current) {
+      console.error('Map not initialized');
+      return;
+    }
+
+    try {
+      const lat = parseFloat(latitude);
+      const lng = parseFloat(longitude);
+      
+      if (isNaN(lat) || isNaN(lng)) {
+        console.error('Invalid coordinates');
+        return;
+      }
+      
+      // Validate coordinate ranges
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        console.error('Coordinates out of range');
+        return;
+      }
+      
+      mapRef.current.setView([lat, lng], mapRef.current.getZoom());
+    } catch (error) {
+      console.error(`Error relocating map: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const handleBasemapChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedBasemap(e.target.value);
+  };
 
   return (
     <div style={{ 
@@ -116,22 +172,96 @@ const TrackingmapView: React.FC = function () {
       right: 0,
       bottom: 0
     }}>
-      {/* Debug status panel - minimized to maximize map space */}
-      <div style={{ 
-        padding: '5px', 
-        backgroundColor: '#f0f0f0', 
-        border: '1px solid #ccc',
-        whiteSpace: 'pre-line',
-        maxHeight: '100px',
-        overflowY: 'auto',
+      {/* Coordinates input control panel */}
+      <div style={{
         position: 'absolute',
-        top: '10px',
-        right: '10px',
+        bottom: '120px', 
+        left: '60px', 
         zIndex: 1000,
-        opacity: 0.8,
-        fontSize: '12px'
+        backgroundColor: 'white',
+        padding: '10px',
+        borderRadius: '4px',
+        boxShadow: '0 1px 5px rgba(0,0,0,0.4)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '5px'
       }}>
-        {mapStatus}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <label htmlFor="latitude" style={{ fontSize: '12px' }}>Lat:</label>
+          <input
+            id="latitude"
+            type="number"
+            value={latitude}
+            onChange={(e) => setLatitude(e.target.value)}
+            style={{
+              width: '100px',
+              padding: '4px',
+              fontSize: '12px',
+              border: '1px solid #ccc'
+            }}
+            step="0.000001"
+            min="-90"
+            max="90"
+          />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <label htmlFor="longitude" style={{ fontSize: '12px' }}>Lng:</label>
+          <input
+            id="longitude"
+            type="number"
+            value={longitude}
+            onChange={(e) => setLongitude(e.target.value)}
+            style={{
+              width: '100px',
+              padding: '4px',
+              fontSize: '12px',
+              border: '1px solid #ccc'
+            }}
+            step="0.000001"
+            min="-180"
+            max="180"
+          />
+        </div>
+        <button
+          onClick={handleRelocate}
+          style={{
+            padding: '4px 8px',
+            backgroundColor: '#0078FF',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '12px'
+          }}
+        >
+          Go to Location
+        </button>
+
+        {/* Basemap selection dropdown */}
+        <div style={{ marginTop: '5px' }}>
+          <label htmlFor="basemap-select" style={{ fontSize: '12px', display: 'block', marginBottom: '3px' }}>
+            Basemap:
+          </label>
+          <select
+            id="basemap-select"
+            value={selectedBasemap}
+            onChange={handleBasemapChange}
+            style={{
+              width: '100%',
+              padding: '4px',
+              fontSize: '12px',
+              border: '1px solid #ccc',
+              borderRadius: '3px',
+              backgroundColor: 'white'
+            }}
+          >
+            {basemapOptions.map(option => (
+              <option key={option.id} value={option.id}>
+                {option.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
       
       {/* Map container with full viewport dimensions */}

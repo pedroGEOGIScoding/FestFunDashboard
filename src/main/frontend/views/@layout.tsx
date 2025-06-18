@@ -40,7 +40,12 @@ export default function MainLayout() {
         </header>
       </div>
 
-      <DrawerToggle slot="navbar" aria-label="Menu toggle"></DrawerToggle>
+      <DrawerToggle slot="navbar" aria-label="Menu toggle" onClick={(e) => {
+        // Navigate to home page when toggle is clicked
+        if (location.pathname !== '/') {
+          navigate('/');
+        }
+      }}></DrawerToggle>
       <h1 slot="navbar" className="text-l m-0">
         {documentTitleSignal}
       </h1>
