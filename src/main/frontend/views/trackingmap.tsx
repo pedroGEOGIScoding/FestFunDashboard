@@ -1,5 +1,6 @@
 import { ViewConfig } from '@vaadin/hilla-file-router/types.js';
 import React, { useState, useEffect, useRef } from 'react';
+import { EventRecordEndpoint } from 'Frontend/generated/endpoints.js';
 
 export const config: ViewConfig = {
   menu: { order: 1, icon: 'line-awesome/svg/map-marked-alt-solid.svg' },
@@ -17,8 +18,11 @@ const TrackingmapView: React.FC = function () {
   const [latitude, setLatitude] = useState('41.368918');
   const [longitude, setLongitude] = useState('2.147618');
   const [selectedBasemap, setSelectedBasemap] = useState('osm');
+  const [markerCount, setMarkerCount] = useState(0);
+  const [loading, setLoading] = useState(false);
   const mapRef = useRef<any>(null);
   const basemapLayersRef = useRef<{[key: string]: any}>({});
+  const markersRef = useRef<any[]>([]);
 
   useEffect(() => {
     // Load Leaflet CSS
@@ -89,6 +93,9 @@ const TrackingmapView: React.FC = function () {
           }
         });
         
+        // Load markers after map initialization
+        loadMapMarkers();
+        
         // Force resize after a delay
         setTimeout(() => {
           console.log('Forcing map resize');
@@ -102,7 +109,12 @@ const TrackingmapView: React.FC = function () {
     return () => {
       clearTimeout(initTimer);
       // Clean up CSS link
-      document.head.removeChild(cssLink);
+      const link = document.head.querySelector('link[href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"]');
+      if (link) document.head.removeChild(link);
+      
+      // Clean up the script
+      const scriptElem = document.head.querySelector('script[src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"]');
+      if (scriptElem) document.head.removeChild(scriptElem);
     };
   }, []);
 
@@ -127,6 +139,91 @@ const TrackingmapView: React.FC = function () {
       console.error(`Error changing basemap: ${error instanceof Error ? error.message : String(error)}`);
     }
   }, [selectedBasemap]);
+
+  // Function to load markers onto the map
+  const loadMapMarkers = async () => {
+    if (!mapRef.current) {
+      console.error('Map not initialized');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      // Clear existing markers
+      if (markersRef.current && markersRef.current.length > 0) {
+        markersRef.current.forEach(marker => {
+          if (mapRef.current && marker) {
+            mapRef.current.removeLayer(marker);
+          }
+        });
+        markersRef.current = [];
+      }
+      
+      // Fetch events data
+      const response = await EventRecordEndpoint.getEventsByEventId('EVENT_050');
+      const events = response ? response.filter(event => !!event) : [];
+      console.log(`Loaded ${events.length} events for mapping`);
+      
+      if (!events || events.length === 0) {
+        setLoading(false);
+        setMarkerCount(0);
+        return;
+      }
+      
+      // @ts-ignore
+      const L = window.L;
+      if (!L) {
+        console.error('Leaflet not found on window object');
+        setLoading(false);
+        return;
+      }
+      
+      const markers = [];
+      const bounds = L.latLngBounds([]);
+      
+      // Create markers for each event
+      for (const event of events) {
+        if (event && event.data && event.data.lat && event.data.lon) {
+          const lat = event.data.lat;
+          const lng = event.data.lon;
+          
+          // Create popup content with event details
+          const popupContent = `
+            <div>
+              <h3>Event: ${event.eventId || 'Unknown'}</h3>
+              <p>Operation: ${event.operation || 'Unknown'}</p>
+              <p>BW ID: ${event.data?.bwId || 'N/A'}</p>
+              <p>Zone: ${event.data?.currentZone || 'N/A'}</p>
+              <p>Type: ${event.data?.type || 'N/A'}</p>
+              <p>Timestamp: ${event.data?.timestamp ? new Date(event.data.timestamp).toLocaleString() : 'N/A'}</p>
+              <p>Coordinates: [${lat}, ${lng}]</p>
+            </div>
+          `;
+          
+          // Create and add the marker
+          const marker = L.marker([lat, lng])
+            .bindPopup(popupContent)
+            .addTo(mapRef.current);
+          
+          markers.push(marker);
+          bounds.extend([lat, lng]);
+        }
+      }
+      
+      markersRef.current = markers;
+      setMarkerCount(markers.length);
+      
+      // Fit map to show all markers if we have any
+      if (markers.length > 0) {
+        mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+      }
+    } catch (error) {
+      console.error('Error loading markers:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleRelocate = () => {
     if (!mapRef.current) {
@@ -261,6 +358,35 @@ const TrackingmapView: React.FC = function () {
               </option>
             ))}
           </select>
+        </div>
+        
+        {/* Refresh markers button */}
+        <button
+          onClick={loadMapMarkers}
+          style={{
+            marginTop: '5px',
+            padding: '4px 8px',
+            backgroundColor: '#28a745',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '12px'
+          }}
+        >
+          Refresh Markers
+        </button>
+        
+        {/* Display marker count */}
+        <div style={{ 
+          marginTop: '5px', 
+          fontSize: '11px', 
+          textAlign: 'center',
+          padding: '3px',
+          backgroundColor: '#f8f9fa',
+          borderRadius: '3px'
+        }}>
+          {loading ? 'Loading...' : `${markerCount} points shown`}
         </div>
       </div>
       
