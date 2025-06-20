@@ -20,6 +20,10 @@ public class EventRecordEndpoint {
   public EventRecord getEvent(String eventId, String operation) {
     return eventRecordRepository.get(eventId, operation, EventRecord.class);
   }
+
+  public EventRecord getAllOperations(String partitionKey) {
+    return eventRecordRepository.getAllOperations(partitionKey, EventRecord.class);
+  }
   
   public List<EventRecord> getAllEvents() {
     return eventRecordRepository.listAll(EventRecord.class);
@@ -36,4 +40,5 @@ public class EventRecordEndpoint {
   public List<EventRecord> getEventsByEventIdAndOperation(String eventId, String operation) {
     return eventRecordRepository.listByPartitionKeyAndSortKey(eventId, operation, EventRecord.class);
   }
+ 
 }

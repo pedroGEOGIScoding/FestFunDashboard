@@ -44,6 +44,8 @@ public class EventRecord {
 	private Long timestamp;
 	private Integer totalBWIdQty;
 	private String type;
+	private double lat;
+	private double lon;
 	
 	@DynamoDbAttribute("bwId")
 	public String getBwId() {
@@ -62,9 +64,7 @@ public class EventRecord {
 	}
 	
 	@DynamoDbAttribute("preAssigned")
-	public Boolean getPreAssigned() {
-	  return preAssigned;
-	}
+	public Boolean getPreAssigned() { return preAssigned;}
 	public void setPreAssigned(Boolean preAssigned) {
 	  this.preAssigned = preAssigned;
 	}
@@ -92,11 +92,22 @@ public class EventRecord {
 	public void setType(String type) {
 	  this.type = type;
 	}
+	
+	@DynamoDbAttribute("lat")
+	public double getLat() { return lat; }
+	public void setLat(double lat) { this.lat = lat; }
+	
+	@DynamoDbAttribute("lon")
+	public double getLon() { return lon; }
+	public void setLon(double lon) { this.lon = lon; }
   }
   
   //Constructors
   public EventRecord(String eventId) {
 	this.eventId = eventId;
+  }
+  
+  public EventRecord() {
   }
   
   public EventRecord(String eventId, String operation, Data data) {

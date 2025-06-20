@@ -32,6 +32,17 @@ public class EventRecordRepositoryImpl implements EventRecordRepository {
   }
   
   @Override
+  public <T> T getAllOperations(String partitionKey, Class<T> clazz) {
+    DynamoDbTable<T> table = enhancedClient.table(tableName, TableSchema.fromBean(clazz));
+    QueryConditional queryConditional = QueryConditional.keyEqualTo(k -> k.partitionValue(partitionKey));
+    return table.query(queryConditional)
+        .items()
+        .stream()
+        .findFirst()
+        .orElse(null);
+  }
+  
+  @Override
   public <T> List<T> listByPartitionKey(String partitionKey, Class<T> clazz) {
     DynamoDbTable<T> table = enhancedClient.table(tableName, TableSchema.fromBean(clazz));
     QueryConditional queryConditional = QueryConditional.keyEqualTo(k -> k.partitionValue(partitionKey));
@@ -80,4 +91,5 @@ public class EventRecordRepositoryImpl implements EventRecordRepository {
         .stream()
         .collect(Collectors.toList());
   }
+  
 }
