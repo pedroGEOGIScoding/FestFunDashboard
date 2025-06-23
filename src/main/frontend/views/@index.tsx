@@ -41,6 +41,14 @@ interface BwIdStats {
   percentage: number;
 }
 
+// Interface for zone time tracking
+interface ZoneTimeStats {
+  zoneName: string;
+  totalTimeMs: number;
+  visits: number;
+  averageTimeMs: number;
+}
+
 export default function DashboardView() {
   const navigate = useNavigate();
   const [eventRecords, setEventRecords] = useState<EventRecord[]>([]);
@@ -51,6 +59,8 @@ export default function DashboardView() {
   const [bwIdStats, setBwIdStats] = useState<BwIdStats[]>([]);
   const [totalBwIds, setTotalBwIds] = useState(0);
   const [displayMode, setDisplayMode] = useState<'top5' | 'all'>('top5');
+  const [zoneTimeStats, setZoneTimeStats] = useState<ZoneTimeStats[]>([]);
+  const [selectedBwId, setSelectedBwId] = useState<string>('');
 
   // Process event records to get bwId statistics
   const processBwIdStats = (records: EventRecord[]) => {
@@ -81,6 +91,106 @@ export default function DashboardView() {
     
     setBwIdStats(statsArray);
     setTotalBwIds(bwIdCounts.size);
+  };
+
+  // Calculate time spent in each zone for selected bwId
+  const calculateZoneTimeStats = (records: EventRecord[], bwId: string) => {
+    if (!bwId || records.length === 0) {
+      setZoneTimeStats([]);
+      return;
+    }
+    
+    // Filter records for the specific bwId
+    const selectedBwIdRecords = records.filter(record => 
+      record.data?.bwId && record.data.bwId.includes(bwId)
+    );
+    
+    if (selectedBwIdRecords.length === 0) {
+      setZoneTimeStats([]);
+      return;
+    }
+    
+    // Sort records by timestamp to process them in chronological order
+    const sortedRecords = [...selectedBwIdRecords].sort((a, b) => 
+      (a.data?.timestamp || 0) - (b.data?.timestamp || 0)
+    );
+    
+    // Group by zone
+    const zoneGroups = new Map<string, { entries: EventRecord[], lastEntry?: EventRecord, totalTime: number, transitions: number }>();
+    
+    // Known zone types
+    const knownZones = ['zone#00#VENUE', 'zone#01#BACKSTAGE', 'zone#01#01#BACKSTAGE#STAGE'];
+    knownZones.forEach(zone => {
+      zoneGroups.set(zone, { entries: [], totalTime: 0, transitions: 0 });
+    });
+    
+    let lastZone: string | undefined = undefined;
+    let lastTimestamp: number | undefined = undefined;
+    
+    // Process records to identify zone transitions and calculate time spent
+    sortedRecords.forEach(record => {
+      const currentZone = record.data?.currentZone;
+      const currentTimestamp = record.data?.timestamp;
+      
+      if (!currentZone || !currentTimestamp) return;
+      
+      // Initialize the zone group if it doesn't exist
+      if (!zoneGroups.has(currentZone)) {
+        zoneGroups.set(currentZone, { entries: [], totalTime: 0, transitions: 0 });
+      }
+      
+      const zoneInfo = zoneGroups.get(currentZone);
+      if (!zoneInfo) return;
+      
+      // Add record to the zone's entries
+      zoneInfo.entries.push(record);
+      
+      // If we had a previous record in a different zone, calculate time difference
+      if (lastZone && lastTimestamp && lastZone !== currentZone) {
+        const previousZoneInfo = zoneGroups.get(lastZone);
+        if (previousZoneInfo) {
+          const timeDiff = currentTimestamp - lastTimestamp;
+          previousZoneInfo.totalTime += timeDiff;
+          previousZoneInfo.transitions += 1;
+        }
+      }
+      
+      // If this is the first entry for this zone, count it as a transition
+      if (zoneInfo.entries.length === 1) {
+        zoneInfo.transitions += 1;
+      }
+      
+      lastZone = currentZone;
+      lastTimestamp = currentTimestamp;
+    });
+    
+    // Convert map to array of zone time stats
+    const stats: ZoneTimeStats[] = Array.from(zoneGroups.entries())
+      .filter(([_, info]) => info.entries.length > 0)
+      .map(([zoneName, info]) => ({
+        zoneName,
+        totalTimeMs: info.totalTime,
+        visits: info.transitions,
+        averageTimeMs: info.transitions > 0 ? info.totalTime / info.transitions : 0
+      }));
+    
+    setZoneTimeStats(stats);
+    setSelectedBwId(bwId);
+  };
+
+  // Format time in milliseconds to a readable format (minutes and seconds)
+  const formatTimeMs = (ms: number) => {
+    if (ms === 0) return '0s';
+    
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    
+    if (minutes === 0) {
+      return `${seconds}s`;
+    }
+    
+    return `${minutes}m ${seconds}s`;
   };
 
   // Function to load all event records
@@ -138,6 +248,7 @@ export default function DashboardView() {
     
     setFilteredRecords(filtered);
     processBwIdStats(filtered);
+    calculateZoneTimeStats(eventRecords, filterBwId);
     Notification.show(`Found ${filtered.length} events with Band Wrist ID containing: ${filterBwId}`, 
       { position: 'bottom-center', duration: 3000 });
   };
@@ -161,6 +272,7 @@ export default function DashboardView() {
         );
         setFilteredRecords(filtered);
         processBwIdStats(filtered);
+        calculateZoneTimeStats(events, filterBwId);
         Notification.show(
           `Found ${filtered.length} events for Event ID: ${filterEventId} with Band Wrist ID containing: ${filterBwId}`, 
           { position: 'bottom-center', duration: 3000 }
@@ -168,6 +280,7 @@ export default function DashboardView() {
       } else {
         setFilteredRecords(events);
         processBwIdStats(events);
+        setZoneTimeStats([]);
         Notification.show(`Loaded ${events.length} events for Event ID: ${filterEventId}`, 
           { position: 'bottom-center', duration: 3000 });
       }
@@ -217,6 +330,30 @@ export default function DashboardView() {
               />
             </div>
           </div>
+
+          {/* Zone Time Stats for selected bwId */}
+          {zoneTimeStats.length > 0 && (
+            <div className="mb-6 bg-secondary-50 p-4 rounded-lg border border-secondary-100">
+              <div className="text-lg font-semibold mb-2">
+                Average Time in Zones for BW ID: <span className="text-secondary">{selectedBwId}</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {zoneTimeStats.map((zoneStat, index) => (
+                  <div key={index} className="bg-white p-3 rounded shadow-sm border border-gray-200">
+                    <div className="font-medium text-secondary mb-1">{zoneStat.zoneName}</div>
+                    <div className="grid grid-cols-2 text-sm">
+                      <div>Visits:</div>
+                      <div className="font-medium">{zoneStat.visits}</div>
+                      <div>Avg. Time:</div> 
+                      <div className="font-medium">{formatTimeMs(zoneStat.averageTimeMs)}</div>
+                      <div>Total Time:</div>
+                      <div className="font-medium">{formatTimeMs(zoneStat.totalTimeMs)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="grid gap-4">
             {(displayMode === 'top5' ? bwIdStats.slice(0, 5) : bwIdStats).map((stat, index) => (

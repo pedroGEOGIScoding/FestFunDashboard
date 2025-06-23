@@ -14,15 +14,32 @@ const basemapOptions = [
   { id: 'googlesat', name: 'Google Satellite Hybrid', url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', attribution: 'Map data &copy; Google' }
 ];
 
+declare global {
+  interface Window {
+    L: any;
+  }
+  
+  namespace L {
+    interface MarkerOptions {
+      bwId?: string;
+      sequenceNumber?: number;
+    }
+  }
+}
+
 const TrackingmapView: React.FC = function () {
   const [latitude, setLatitude] = useState('41.368918');
   const [longitude, setLongitude] = useState('2.147618');
   const [selectedBasemap, setSelectedBasemap] = useState('osm');
   const [markerCount, setMarkerCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [uniqueBwIds, setUniqueBwIds] = useState<string[]>([]);
+  const [bwIdColorMap, setBwIdColorMap] = useState<{[key: string]: string}>({});
+  const [selectedBwId, setSelectedBwId] = useState<string>('');
+  const [filteredMarkerCount, setFilteredMarkerCount] = useState(0);
   const mapRef = useRef<any>(null);
   const basemapLayersRef = useRef<{[key: string]: any}>({});
-  const markersRef = useRef<any[]>([]);
+  const markersRef = useRef<L.Marker[]>([]);
 
   useEffect(() => {
     // Load Leaflet CSS
@@ -118,7 +135,6 @@ const TrackingmapView: React.FC = function () {
     };
   }, []);
 
-  // Effect to handle basemap changes
   useEffect(() => {
     if (!mapRef.current || !basemapLayersRef.current) return;
     
@@ -140,7 +156,48 @@ const TrackingmapView: React.FC = function () {
     }
   }, [selectedBasemap]);
 
-  // Function to load markers onto the map
+  const getColorFromBwId = (bwId: string) => {
+    const actualId = bwId.split('#')[0];
+    
+    if (bwIdColorMap[actualId]) {
+      return bwIdColorMap[actualId];
+    }
+    
+    let hash = 0;
+    for (let i = 0; i < actualId.length; i++) {
+      hash = actualId.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    
+    const r = ((hash & 0xFF) % 200) + 40;
+    const g = (((hash >> 8) & 0xFF) % 200) + 40;
+    const b = (((hash >> 16) & 0xFF) % 200) + 40;
+    
+    return `rgb(${r}, ${g}, ${b})`;
+  };
+
+  // Function to create a custom marker icon with the specific color and sequence number
+  const createColoredMarkerIcon = (color: string, sequenceNumber: number, L: any) => {
+    return L.divIcon({
+      className: 'custom-map-marker',
+      html: `<div style="
+        background-color: ${color};
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: 0 0 4px rgba(0,0,0,0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: bold;
+        color: white;
+      ">${sequenceNumber}</div>`,
+      iconSize: [28, 28],
+      iconAnchor: [14, 14]
+    });
+  };
+
   const loadMapMarkers = async () => {
     if (!mapRef.current) {
       console.error('Map not initialized');
@@ -171,7 +228,6 @@ const TrackingmapView: React.FC = function () {
         return;
       }
       
-      // @ts-ignore
       const L = window.L;
       if (!L) {
         console.error('Leaflet not found on window object');
@@ -179,40 +235,101 @@ const TrackingmapView: React.FC = function () {
         return;
       }
       
-      const markers = [];
+      // Group events by bwId
+      const eventsByBwId = new Map<string, Array<{event: any, timestamp: number}>>();
+      
+      // First pass: group events by bwId
+      events.forEach(event => {
+        if (event?.data?.bwId && event?.data?.timestamp) {
+          const actualId = event.data.bwId.split('#')[0];
+          const timestamp = Number(event.data.timestamp);
+          
+          if (!eventsByBwId.has(actualId)) {
+            eventsByBwId.set(actualId, []);
+          }
+          
+          eventsByBwId.get(actualId)?.push({ event, timestamp });
+        }
+      });
+      
+      // Second pass: sort each group by timestamp
+      eventsByBwId.forEach((eventGroup, bwId) => {
+        eventGroup.sort((a, b) => a.timestamp - b.timestamp);
+      });
+      
+      const markers: L.Marker[] = [];
       const bounds = L.latLngBounds([]);
       
-      // Create markers for each event
-      for (const event of events) {
-        if (event && event.data && event.data.lat && event.data.lon) {
-          const lat = event.data.lat;
-          const lng = event.data.lon;
-          
-          // Create popup content with event details
-          const popupContent = `
-            <div>
-              <h3>Event: ${event.eventId || 'Unknown'}</h3>
-              <p>Operation: ${event.operation || 'Unknown'}</p>
-              <p>BW ID: ${event.data?.bwId || 'N/A'}</p>
-              <p>Zone: ${event.data?.currentZone || 'N/A'}</p>
-              <p>Type: ${event.data?.type || 'N/A'}</p>
-              <p>Timestamp: ${event.data?.timestamp ? new Date(event.data.timestamp).toLocaleString() : 'N/A'}</p>
-              <p>Coordinates: [${lat}, ${lng}]</p>
-            </div>
-          `;
-          
-          // Create and add the marker
-          const marker = L.marker([lat, lng])
-            .bindPopup(popupContent)
-            .addTo(mapRef.current);
-          
-          markers.push(marker);
-          bounds.extend([lat, lng]);
-        }
-      }
+      const uniqueBwIdSet = new Set<string>();
+      const newColorMap: {[key: string]: string} = {};
+      
+      // Extract unique bwIds
+      Array.from(eventsByBwId.keys()).forEach(bwId => {
+        uniqueBwIdSet.add(bwId);
+      });
+      
+      // Convert set to array for state
+      const uniqueIds = Array.from(uniqueBwIdSet);
+      
+      // Generate colors for each unique bwId
+      uniqueIds.forEach(bwId => {
+        newColorMap[bwId] = getColorFromBwId(bwId);
+      });
+      
+      // Update state with unique IDs and colors
+      setUniqueBwIds(uniqueIds);
+      setBwIdColorMap(newColorMap);
+      
+      // Create markers for each event with sequence numbers
+      eventsByBwId.forEach((eventGroup, bwId) => {
+        const color = newColorMap[bwId] || '#3388ff';
+        
+        eventGroup.forEach((item, index) => {
+          const event = item.event;
+          if (event?.data?.lat && event?.data?.lon) {
+            const lat = event.data.lat;
+            const lng = event.data.lon;
+            
+            // Create a custom marker icon with the color and sequence number
+            const markerIcon = createColoredMarkerIcon(color, index, L);
+            
+            // Create popup content with event details and highlight the bwId color
+            const popupContent = `
+              <div>
+                <h3>Event: ${event.eventId || 'Unknown'}</h3>
+                <p>Operation: ${event.operation || 'Unknown'}</p>
+                <p>BW ID: <span style="color: ${color}; font-weight: bold;">${event.data?.bwId || 'N/A'}</span></p>
+                <p>Zone: ${event.data?.currentZone || 'N/A'}</p>
+                <p>Type: ${event.data?.type || 'N/A'}</p>
+                <p>Timestamp: ${event.data?.timestamp ? new Date(event.data.timestamp).toLocaleString() : 'N/A'}</p>
+                <p>Coordinates: [${lat}, ${lng}]</p>
+                <p>Sequence: <strong>${index}</strong> (of ${eventGroup.length - 1})</p>
+              </div>
+            `;
+            
+            // Create and add the marker with custom icon and store bwId in options for filtering
+            const marker = L.marker([lat, lng], { 
+              icon: markerIcon,
+              bwId: event.data.bwId,
+              sequenceNumber: index
+            })
+              .bindPopup(popupContent)
+              .addTo(mapRef.current);
+            
+            markers.push(marker);
+            bounds.extend([lat, lng]);
+          }
+        });
+      });
       
       markersRef.current = markers;
       setMarkerCount(markers.length);
+      setFilteredMarkerCount(markers.length);
+      
+      // Apply filter if there's a selected bwId
+      if (selectedBwId) {
+        filterMarkersByBwId(selectedBwId);
+      }
       
       // Fit map to show all markers if we have any
       if (markers.length > 0) {
@@ -240,7 +357,6 @@ const TrackingmapView: React.FC = function () {
         return;
       }
       
-      // Validate coordinate ranges
       if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
         console.error('Coordinates out of range');
         return;
@@ -256,6 +372,65 @@ const TrackingmapView: React.FC = function () {
     setSelectedBasemap(e.target.value);
   };
 
+  const handleBwIdSelection = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedBwId(e.target.value);
+    filterMarkersByBwId(e.target.value);
+  };
+
+  // Function to filter markers by selected bwId
+  const filterMarkersByBwId = (bwId: string) => {
+    if (!mapRef.current || !markersRef.current) return;
+    
+    try {
+      const L = window.L;
+      let visibleCount = 0;
+      
+      // If empty selection (show all), make all markers visible
+      if (!bwId) {
+        markersRef.current.forEach(marker => {
+          if (marker) {
+            marker.getElement().style.display = '';
+            visibleCount++;
+          }
+        });
+        setFilteredMarkerCount(visibleCount);
+        return;
+      }
+      
+      // Otherwise, show only markers for the selected bwId
+      markersRef.current.forEach(marker => {
+        if (marker && marker.options && marker.options.bwId) {
+          const markerBwId = marker.options.bwId.split('#')[0];
+          const isMatch = markerBwId === bwId;
+          
+          marker.getElement().style.display = isMatch ? '' : 'none';
+          if (isMatch) visibleCount++;
+        }
+      });
+      
+      setFilteredMarkerCount(visibleCount);
+      
+      // Find center point of visible markers to adjust view
+      if (visibleCount > 0) {
+        const visibleMarkers = markersRef.current.filter(marker => 
+          marker && marker.options && marker.options.bwId && 
+          marker.options.bwId.split('#')[0] === bwId
+        );
+        
+        if (visibleMarkers.length > 0) {
+          const bounds = L.latLngBounds([]);
+          visibleMarkers.forEach(marker => {
+            bounds.extend(marker.getLatLng());
+          });
+          
+          mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+        }
+      }
+    } catch (error) {
+      console.error('Error filtering markers:', error);
+    }
+  };
+
   return (
     <div style={{ 
       padding: '0', 
@@ -269,7 +444,6 @@ const TrackingmapView: React.FC = function () {
       right: 0,
       bottom: 0
     }}>
-      {/* Coordinates input control panel */}
       <div style={{
         position: 'absolute',
         bottom: '120px', 
@@ -334,7 +508,6 @@ const TrackingmapView: React.FC = function () {
           Go to Location
         </button>
 
-        {/* Basemap selection dropdown */}
         <div style={{ marginTop: '5px' }}>
           <label htmlFor="basemap-select" style={{ fontSize: '12px', display: 'block', marginBottom: '3px' }}>
             Basemap:
@@ -360,7 +533,32 @@ const TrackingmapView: React.FC = function () {
           </select>
         </div>
         
-        {/* Refresh markers button */}
+        <div style={{ marginTop: '5px' }}>
+          <label htmlFor="bwid-select" style={{ fontSize: '12px', display: 'block', marginBottom: '3px' }}>
+            Filter by BW ID:
+          </label>
+          <select
+            id="bwid-select"
+            value={selectedBwId}
+            onChange={handleBwIdSelection}
+            style={{
+              width: '100%',
+              padding: '4px',
+              fontSize: '12px',
+              border: '1px solid #ccc',
+              borderRadius: '3px',
+              backgroundColor: 'white'
+            }}
+          >
+            <option value="">Show All</option>
+            {uniqueBwIds.map(bwId => (
+              <option key={bwId} value={bwId} style={{color: bwIdColorMap[bwId]}}>
+                {bwId}
+              </option>
+            ))}
+          </select>
+        </div>
+        
         <button
           onClick={loadMapMarkers}
           style={{
@@ -377,7 +575,6 @@ const TrackingmapView: React.FC = function () {
           Refresh Markers
         </button>
         
-        {/* Display marker count */}
         <div style={{ 
           marginTop: '5px', 
           fontSize: '11px', 
@@ -386,11 +583,42 @@ const TrackingmapView: React.FC = function () {
           backgroundColor: '#f8f9fa',
           borderRadius: '3px'
         }}>
-          {loading ? 'Loading...' : `${markerCount} points shown`}
+          {loading ? 'Loading...' : 
+            selectedBwId ? 
+              `${filteredMarkerCount} of ${markerCount} points shown • ${uniqueBwIds.length} unique BW IDs` :
+              `${markerCount} points shown • ${uniqueBwIds.length} unique BW IDs`
+          }
         </div>
+        
+        {uniqueBwIds.length > 0 && (
+          <div style={{
+            marginTop: '8px',
+            fontSize: '11px',
+            maxHeight: '150px',
+            overflow: 'auto',
+            border: '1px solid #eee',
+            borderRadius: '3px',
+            padding: '5px'
+          }}>
+            <div style={{ fontWeight: 'bold', marginBottom: '3px' }}>BW ID Legend:</div>
+            {uniqueBwIds.map(bwId => (
+              <div key={bwId} style={{ display: 'flex', alignItems: 'center', marginBottom: '2px' }}>
+                <div style={{
+                  width: '10px',
+                  height: '10px',
+                  backgroundColor: bwIdColorMap[bwId],
+                  borderRadius: '50%',
+                  marginRight: '5px'
+                }}></div>
+                <span style={{ fontSize: '10px', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                  {bwId}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       
-      {/* Map container with full viewport dimensions */}
       <div 
         id="map-container" 
         style={{ 
