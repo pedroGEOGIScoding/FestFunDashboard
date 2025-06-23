@@ -638,5 +638,6 @@ export default function DashboardView() {
 }
 
 export const config: ViewConfig = {
-  // No specific route configuration needed
+  menu: { order: 0, icon: 'line-awesome/svg/chart-bar-solid.svg' },
+  title: 'Wristband Dashboard'
 };
