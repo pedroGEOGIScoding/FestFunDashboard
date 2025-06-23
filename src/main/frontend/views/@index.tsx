@@ -447,24 +447,35 @@ export default function DashboardView() {
       {/* BwId Dashboard */}
       <Card className="mb-6">
         <div className="p-4">
-          <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-bold">Band Wrist ID Dashboard</h2>
-              <div className="bg-primary-50 text-primary border border-primary-100 rounded-md px-3 py-1 text-sm">
-                <span className="font-semibold">{filteredRecords.length}</span> records retrieved
+          <div className="grid grid-cols-3 items-center mb-4">
+            <div>
+              <h2 className="text-2xl font-bold">Wristband Operations Dashboard</h2>
+            </div>
+            
+            <div className="flex items-center justify-center p-m">
+              <div className="bg-gray-100 text-gray-700 rounded-md text-sm pt-0 pr-m pb-0 pl-m gap-y-m gap-x-l">
+                Operations recorded: <span className="font-semibold">{filteredRecords.length}</span>
+              </div>
+              
+              <div className="mx-24 h-8 border-l-4 border-gray-300" style={{minWidth: '17px'}}></div>
+              
+              <div className="bg-gray-100 text-gray-700 rounded-md px-3 py-1 text-sm gap-y-m gap-x-xl">
+                Total Unique Wristbands: <span className="font-bold">{totalBwIds}</span>
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              <div>Total Unique BW IDs: <span className="font-bold">{totalBwIds}</span></div>
-              <Select
-                label="Display"
-                value={displayMode}
-                onChange={(e) => setDisplayMode(e.target.value as 'top5' | 'all')}
-                items={[
-                  { label: 'Top 5', value: 'top5' },
-                  { label: 'All', value: 'all' }
-                ]}
-              />
+            
+            <div className="flex justify-end">
+              <div className="bg-gray-50 text-gray-700 rounded-md px-3 py-1">
+                <Select
+                  className="min-w-[80px]"
+                  value={displayMode}
+                  onChange={(e) => setDisplayMode(e.target.value as 'top5' | 'all')}
+                  items={[
+                    { label: 'Top 5', value: 'top5' },
+                    { label: 'All', value: 'all' }
+                  ]}
+                />
+              </div>
             </div>
           </div>
 
@@ -510,7 +521,7 @@ export default function DashboardView() {
           
           {/* Overall Zone Time Stats */}
           {overallZoneTimeStats.length > 0 && (
-            <div className="mt-6 bg-primary-50 p-4 rounded-lg border border-primary-100">
+            <div className="mt-6 bg-gray-100 p-4 rounded-lg border border-gray-200">
               <div className="text-lg font-semibold mb-2">
                 Overall Average Time in Zones (All Records)
               </div>
