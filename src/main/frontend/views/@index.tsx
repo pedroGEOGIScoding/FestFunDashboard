@@ -368,7 +368,7 @@ export default function DashboardView() {
   // Function to filter events by bwId
   const filterEventsByBwId = () => {
     if (!filterBwId) {
-      Notification.show('Please enter a Band Wrist ID', { position: 'bottom-center', theme: 'warning' });
+      Notification.show('Please enter a Wristband ID', { position: 'bottom-center', theme: 'warning' });
       return;
     }
     
@@ -382,7 +382,7 @@ export default function DashboardView() {
     processBwIdStats(filtered);
     calculateZoneTimeStats(eventRecords, filterBwId);
     calculateOverallZoneTimeStats(filtered);
-    Notification.show(`Found ${filtered.length} events with Band Wrist ID containing: ${filterBwId}`, 
+    Notification.show(`Found ${filtered.length} events with Wristband ID containing: ${filterBwId}`,
       { position: 'bottom-center', duration: 3000 });
   };
 
@@ -409,7 +409,7 @@ export default function DashboardView() {
         calculateZoneTimeStats(events, filterBwId);
         calculateOverallZoneTimeStats(filtered);
         Notification.show(
-          `Found ${filtered.length} events for Event ID: ${filterEventId} with Band Wrist ID containing: ${filterBwId}`, 
+          `Found ${filtered.length} events for Event ID: ${filterEventId} with Wristband ID containing: ${filterBwId}`,
           { position: 'bottom-center', duration: 3000 }
         );
       } else {
@@ -560,7 +560,7 @@ export default function DashboardView() {
           <div style={{ width: '20px' }}></div> {/* Spacer element for additional separation */}
           
           <TextField
-            label="Insert Band Wrist ID"
+            label="Insert Wristband ID"
             value={filterBwId}
             onChange={(e) => setFilterBwId(e.target.value)}
             placeholder="Enter bwId to filter" style={{width: '220px'}}

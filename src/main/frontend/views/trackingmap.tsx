@@ -461,14 +461,14 @@ const TrackingmapView: React.FC = function () {
           gap: '5px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <label htmlFor="latitude" style={{ fontSize: '12px' }}>Lat:</label>
+            <label htmlFor="latitude" style={{fontSize: '12px', width: '57px'}}>Latitude:</label>
             <input
               id="latitude"
               type="number"
               value={latitude}
               onChange={(e) => setLatitude(e.target.value)}
               style={{
-                width: '100px',
+                width: '250px',
                 padding: '4px',
                 fontSize: '12px',
                 border: '1px solid #ccc'
@@ -479,14 +479,14 @@ const TrackingmapView: React.FC = function () {
             />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <label htmlFor="longitude" style={{ fontSize: '12px' }}>Lng:</label>
+            <label htmlFor="longitude" style={{ fontSize: '12px' }}>Longitude:</label>
             <input
               id="longitude"
               type="number"
               value={longitude}
               onChange={(e) => setLongitude(e.target.value)}
               style={{
-                width: '100px',
+                width: '250px',
                 padding: '4px',
                 fontSize: '12px',
                 border: '1px solid #ccc'
@@ -508,12 +508,12 @@ const TrackingmapView: React.FC = function () {
               fontSize: '12px'
             }}
           >
-            Go to Location
+            Go to Location Event
           </button>
 
           <div style={{ marginTop: '5px' }}>
             <label htmlFor="basemap-select" style={{ fontSize: '12px', display: 'block', marginBottom: '3px' }}>
-              Basemap:
+              Basemap Selection
             </label>
             <select
               id="basemap-select"
@@ -538,7 +538,7 @@ const TrackingmapView: React.FC = function () {
           
           <div style={{ marginTop: '5px' }}>
             <label htmlFor="bwid-select" style={{ fontSize: '12px', display: 'block', marginBottom: '3px' }}>
-              Filter by BW ID:
+              Filter by Wristband ID
             </label>
             <select
               id="bwid-select"
@@ -575,7 +575,7 @@ const TrackingmapView: React.FC = function () {
               fontSize: '12px'
             }}
           >
-            Refresh Markers
+            Refresh Wristband Checking Points
           </button>
           
           <div style={{ 
@@ -588,8 +588,8 @@ const TrackingmapView: React.FC = function () {
           }}>
             {loading ? 'Loading...' : 
               selectedBwId ? 
-                `${filteredMarkerCount} of ${markerCount} points shown • ${uniqueBwIds.length} unique BW IDs` :
-                `${markerCount} points shown • ${uniqueBwIds.length} unique BW IDs`
+                `${filteredMarkerCount} of ${markerCount} Wristband checking points shown • ${uniqueBwIds.length} Unique Wristband IDs` :
+                `${markerCount} Wristband checking points shown • ${uniqueBwIds.length} Unique Wristband IDs`
             }
           </div>
         </div>
