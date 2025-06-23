@@ -187,15 +187,15 @@ const TrackingmapView: React.FC = function () {
       className: 'custom-map-marker',
       html: `<div style="
         background-color: ${color};
-        width: 24px;
-        height: 24px;
+        width: 18px;
+        height: 18px;
         border-radius: 50%;
         border: 2px solid white;
         box-shadow: 0 0 4px rgba(0,0,0,0.4);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 10px;
+        font-size: 8px;
         font-weight: bold;
         color: white;
       ">${sequenceNumber}</div>`,

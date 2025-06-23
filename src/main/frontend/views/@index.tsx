@@ -3,18 +3,16 @@ import { useNavigate } from 'react-router';
 import { useEffect, useState } from "react";
 import { Grid } from '@vaadin/react-components';
 import { GridColumn } from '@vaadin/react-components';
-import { Button } from '@vaadin/react-components';
 import { TextField } from '@vaadin/react-components';
+import { Button } from '@vaadin/react-components';
 import { Notification } from '@vaadin/react-components';
-import { EventRecordEndpoint } from 'Frontend/generated/endpoints.js';
 import { Card } from '@vaadin/react-components';
-import { ProgressBar } from '@vaadin/react-components';
+import { ComboBox } from '@vaadin/react-components';
 import { Select } from '@vaadin/react-components';
-
-export const config: ViewConfig = {
-  menu: { order: 0, icon: 'line-awesome/svg/stopwatch-solid.svg' },
-  title: 'Dashboard Event',
-};
+import { ProgressBar } from '@vaadin/react-components';
+import { HorizontalLayout } from '@vaadin/react-components';
+import '@vaadin/vaadin-lumo-styles/all-imports';
+import { EventRecordEndpoint } from 'Frontend/generated/endpoints.js';
 
 // Define the EventRecord type to match the Java model with optional fields
 interface Data {
@@ -53,14 +51,17 @@ export default function DashboardView() {
   const navigate = useNavigate();
   const [eventRecords, setEventRecords] = useState<EventRecord[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<EventRecord[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [filterEventId, setFilterEventId] = useState('EVENT_050');
-  const [filterBwId, setFilterBwId] = useState('');
+  const [filterEventId, setFilterEventId] = useState<string>('EVENT_050');
+  const [filterBwId, setFilterBwId] = useState<string>('');
+  const [filterOperation, setFilterOperation] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(false);
   const [bwIdStats, setBwIdStats] = useState<BwIdStats[]>([]);
-  const [totalBwIds, setTotalBwIds] = useState(0);
+  const [totalBwIds, setTotalBwIds] = useState<number>(0);
   const [displayMode, setDisplayMode] = useState<'top5' | 'all'>('top5');
   const [zoneTimeStats, setZoneTimeStats] = useState<ZoneTimeStats[]>([]);
+  const [overallZoneTimeStats, setOverallZoneTimeStats] = useState<ZoneTimeStats[]>([]);
   const [selectedBwId, setSelectedBwId] = useState<string>('');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // Process event records to get bwId statistics
   const processBwIdStats = (records: EventRecord[]) => {
@@ -91,9 +92,12 @@ export default function DashboardView() {
     
     setBwIdStats(statsArray);
     setTotalBwIds(bwIdCounts.size);
+    
+    // Calculate overall zone time statistics for all records
+    calculateOverallZoneTimeStats(records);
   };
 
-  // Calculate time spent in each zone for selected bwId
+  // Calculate zone time statistics for a specific bwId
   const calculateZoneTimeStats = (records: EventRecord[], bwId: string) => {
     if (!bwId || records.length === 0) {
       setZoneTimeStats([]);
@@ -184,6 +188,123 @@ export default function DashboardView() {
     setSelectedBwId(bwId);
   };
 
+  // Calculate overall zone time statistics for all records
+  const calculateOverallZoneTimeStats = (records: EventRecord[]) => {
+    if (!records || records.length === 0) {
+      setOverallZoneTimeStats([]);
+      return;
+    }
+    
+    // Sort records by timestamp to process them in chronological order
+    const sortedRecords = [...records].sort((a, b) => 
+      (a.data?.timestamp || 0) - (b.data?.timestamp || 0)
+    );
+    
+    // Group by zone
+    const zoneGroups = new Map<string, { entries: EventRecord[], totalTime: number, visits: number }>();
+    
+    // Known zone types
+    const knownZones = ['zone#00#VENUE', 'zone#01#BACKSTAGE', 'zone#01#01#BACKSTAGE#STAGE'];
+    knownZones.forEach(zone => {
+      zoneGroups.set(zone, { entries: [], totalTime: 0, visits: 0 });
+    });
+    
+    // Group records by bwId to process each person's journey separately
+    const bwIdGroups = new Map<string, EventRecord[]>();
+    
+    // First, group records by bwId
+    sortedRecords.forEach(record => {
+      if (!record.data?.bwId) return;
+      
+      const bwId = record.data.bwId.split('#')[0]; // Extract the actual bwId
+      
+      if (!bwIdGroups.has(bwId)) {
+        bwIdGroups.set(bwId, []);
+      }
+      
+      bwIdGroups.get(bwId)?.push(record);
+    });
+    
+    // For each bwId, process their journey and calculate zone times
+    bwIdGroups.forEach((personRecords, _) => {
+      // Sort this person's records by timestamp
+      personRecords.sort((a, b) => (a.data?.timestamp || 0) - (b.data?.timestamp || 0));
+      
+      let lastZone: string | undefined = undefined;
+      let lastTimestamp: number | undefined = undefined;
+      
+      // Process records to calculate time spent in each zone
+      personRecords.forEach(record => {
+        const currentZone = record.data?.currentZone;
+        const currentTimestamp = record.data?.timestamp;
+        
+        if (!currentZone || !currentTimestamp) return;
+        
+        // Make sure we have an entry for this zone
+        if (!zoneGroups.has(currentZone)) {
+          zoneGroups.set(currentZone, { entries: [], totalTime: 0, visits: 0 });
+        }
+        
+        // Add record to the zone's entries and count it as a visit
+        const zoneInfo = zoneGroups.get(currentZone);
+        if (zoneInfo) {
+          zoneInfo.entries.push(record);
+          zoneInfo.visits += 1;
+        }
+        
+        // If we had a previous record in a different zone, calculate time difference
+        if (lastZone && lastTimestamp && lastZone !== currentZone) {
+          const previousZoneInfo = zoneGroups.get(lastZone);
+          if (previousZoneInfo) {
+            const timeDiff = currentTimestamp - lastTimestamp;
+            previousZoneInfo.totalTime += timeDiff;
+          }
+        }
+        
+        lastZone = currentZone;
+        lastTimestamp = currentTimestamp;
+      });
+    });
+    
+    // Convert map to array of zone time stats
+    const stats: ZoneTimeStats[] = Array.from(zoneGroups.entries())
+      .filter(([_, info]) => info.visits > 0) // Only include zones that were visited
+      .map(([zoneName, info]) => ({
+        zoneName,
+        totalTimeMs: info.totalTime,
+        visits: info.visits,
+        averageTimeMs: info.visits > 0 ? info.totalTime / info.visits : 0
+      }));
+    
+    setOverallZoneTimeStats(stats);
+  };
+
+  // Function to sort records by timestamp
+  const sortRecordsByTimestamp = (records: EventRecord[]) => {
+    const sortedRecords = [...records];
+    sortedRecords.sort((a, b) => {
+      const timestampA = a.data?.timestamp || 0;
+      const timestampB = b.data?.timestamp || 0;
+      
+      return sortOrder === 'asc' 
+        ? timestampA - timestampB  // Ascending: oldest to newest
+        : timestampB - timestampA; // Descending: newest to oldest
+    });
+    
+    return sortedRecords;
+  };
+
+  // Toggle sorting order and re-sort records
+  const toggleSortOrder = () => {
+    const newSortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+    setSortOrder(newSortOrder);
+    setFilteredRecords(sortRecordsByTimestamp([...filteredRecords]));
+    
+    // Show notification about the sort order change
+    Notification.show(`Events sorted by timestamp: ${newSortOrder === 'asc' ? 'oldest to newest' : 'newest to oldest'}`, 
+      { position: 'bottom-center', duration: 2000 });
+  };
+
   // Format time in milliseconds to a readable format (minutes and seconds)
   const formatTimeMs = (ms: number) => {
     if (ms === 0) return '0s';
@@ -206,8 +327,10 @@ export default function DashboardView() {
       const response = await EventRecordEndpoint.getEventsByEventId(filterEventId);
       const allEvents = response?.filter((event): event is EventRecord => !!event) || [];
       setEventRecords(allEvents);
-      setFilteredRecords(allEvents);
+      const sortedEvents = sortRecordsByTimestamp(allEvents);
+      setFilteredRecords(sortedEvents);
       processBwIdStats(allEvents);
+      calculateOverallZoneTimeStats(allEvents);
       Notification.show('Events loaded successfully', { position: 'bottom-center', duration: 3000 });
     } catch (error) {
       console.error('Error fetching event records:', error);
@@ -229,8 +352,10 @@ export default function DashboardView() {
       const response = await EventRecordEndpoint.getEventsByEventId(filterEventId);
       const events = response?.filter((event): event is EventRecord => !!event) || [];
       setEventRecords(events);
-      setFilteredRecords(events);
+      const sortedEvents = sortRecordsByTimestamp(events);
+      setFilteredRecords(sortedEvents);
       processBwIdStats(events);
+      calculateOverallZoneTimeStats(events);
       Notification.show(`Loaded ${events.length} events for Event ID: ${filterEventId}`, { position: 'bottom-center', duration: 3000 });
     } catch (error) {
       console.error('Error fetching events by Event ID:', error);
@@ -252,9 +377,11 @@ export default function DashboardView() {
       record.data?.bwId && record.data.bwId.includes(filterBwId)
     );
     
-    setFilteredRecords(filtered);
+    const sortedFiltered = sortRecordsByTimestamp(filtered);
+    setFilteredRecords(sortedFiltered);
     processBwIdStats(filtered);
     calculateZoneTimeStats(eventRecords, filterBwId);
+    calculateOverallZoneTimeStats(filtered);
     Notification.show(`Found ${filtered.length} events with Band Wrist ID containing: ${filterBwId}`, 
       { position: 'bottom-center', duration: 3000 });
   };
@@ -276,17 +403,21 @@ export default function DashboardView() {
         const filtered = events.filter(record => 
           record.data?.bwId && record.data.bwId.includes(filterBwId)
         );
-        setFilteredRecords(filtered);
+        const sortedFiltered = sortRecordsByTimestamp(filtered);
+        setFilteredRecords(sortedFiltered);
         processBwIdStats(filtered);
         calculateZoneTimeStats(events, filterBwId);
+        calculateOverallZoneTimeStats(filtered);
         Notification.show(
           `Found ${filtered.length} events for Event ID: ${filterEventId} with Band Wrist ID containing: ${filterBwId}`, 
           { position: 'bottom-center', duration: 3000 }
         );
       } else {
-        setFilteredRecords(events);
+        const sortedEvents = sortRecordsByTimestamp(events);
+        setFilteredRecords(sortedEvents);
         processBwIdStats(events);
         setZoneTimeStats([]);
+        calculateOverallZoneTimeStats(events);
         Notification.show(`Loaded ${events.length} events for Event ID: ${filterEventId}`, 
           { position: 'bottom-center', duration: 3000 });
       }
@@ -376,11 +507,37 @@ export default function DashboardView() {
               <div className="text-center py-4">No data available. Load events to see statistics.</div>
             )}
           </div>
+          
+          {/* Overall Zone Time Stats */}
+          {overallZoneTimeStats.length > 0 && (
+            <div className="mt-6 bg-primary-50 p-4 rounded-lg border border-primary-100">
+              <div className="text-lg font-semibold mb-2">
+                Overall Average Time in Zones (All Records)
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {overallZoneTimeStats.map((zoneStat, index) => (
+                  <div key={index} className="bg-white p-3 rounded shadow-sm border border-gray-200">
+                    <div className="font-medium text-primary mb-1">{zoneStat.zoneName}</div>
+                    <div className="grid grid-cols-2 text-sm">
+                      <div>Visits:</div>
+                      <div className="font-medium">{zoneStat.visits}</div>
+                      <div>Avg. Time:</div> 
+                      <div className="font-medium">{formatTimeMs(zoneStat.averageTimeMs)}</div>
+                      <div>Total Time:</div>
+                      <div className="font-medium">{formatTimeMs(zoneStat.totalTimeMs)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </Card>
 
       <div className="mb-4">
-        <h2 className="text-xl font-bold mb-4">DynamoDB Event Records</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold">DynamoDB Event Records</h2>
+        </div>
         
         <div className="flex flex-wrap gap-4 mb-4">
           <TextField
@@ -416,33 +573,59 @@ export default function DashboardView() {
             </Button>
           </div>
         </div>
+      
+        {loading && (
+          <div className="text-center py-8">Loading events...</div>
+        )}
+        
+        {!loading && filteredRecords.length === 0 && (
+          <div className="text-center py-8">No events found. Adjust your filters or load events.</div>
+        )}
+        
+        {!loading && filteredRecords.length > 0 && (
+          <Grid
+            className="mt-4"
+            all-rows-visible
+            theme="row-stripes"
+            items={filteredRecords}
+          >
+            <GridColumn path="eventId" header="Event ID" autoWidth />
+            <GridColumn path="operation" header="Operation" autoWidth />
+            <GridColumn path="data.bwId" header="BW ID" autoWidth />
+            <GridColumn path="data.currentZone" header="Current Zone" autoWidth />
+            <GridColumn path="data.preAssigned" header="Pre-Assigned" autoWidth />
+            <GridColumn 
+              header={
+                <div className="flex items-center cursor-pointer" onClick={toggleSortOrder}>
+                  <span>Timestamp</span>
+                  <span 
+                    title={sortOrder === 'asc' ? 'Sort by timestamp (Newest to Oldest)' : 'Sort by timestamp (Oldest to Newest)'} 
+                    style={{ 
+                      color: 'red', 
+                      fontWeight: 'bold', 
+                      fontSize: '26px', 
+                      marginLeft: '8px',
+                      display: 'inline-block'
+                    }}
+                  >
+                    {sortOrder === 'asc' ? '↓' : '↑'}
+                  </span>
+                </div>
+              }
+              autoWidth
+              renderer={({ item }) => formatTimestamp(item.data?.timestamp)}
+            />
+            <GridColumn path="data.totalBWIdQty" header="Total BWID Quantity" autoWidth />
+            <GridColumn path="data.type" header="Type" autoWidth />
+            <GridColumn path="data.lat" header="Latitude" autoWidth />
+            <GridColumn path="data.lon" header="Longitude" autoWidth />
+          </Grid>
+        )}
       </div>
-
-      {loading ? (
-        <div className="flex justify-center p-4">Loading events...</div>
-      ) : (
-        <Grid
-          items={filteredRecords}
-          className="h-full"
-          theme="row-stripes"
-          allRowsVisible
-        >
-          <GridColumn path="eventId" header="Event ID" autoWidth />
-          <GridColumn path="operation" header="Operation" autoWidth />
-          <GridColumn path="data.bwId" header="BW ID" autoWidth />
-          <GridColumn path="data.currentZone" header="Current Zone" autoWidth />
-          <GridColumn path="data.preAssigned" header="Pre-Assigned" autoWidth />
-          <GridColumn 
-            header="Timestamp"
-            autoWidth
-            renderer={({ item }) => formatTimestamp(item.data?.timestamp)}
-          />
-          <GridColumn path="data.totalBWIdQty" header="Total BWID Quantity" autoWidth />
-          <GridColumn path="data.type" header="Type" autoWidth />
-          <GridColumn path="data.lat" header="Latitude" autoWidth />
-          <GridColumn path="data.lon" header="Longitude" autoWidth />
-        </Grid>
-      )}
     </div>
   );
 }
+
+export const config: ViewConfig = {
+  // No specific route configuration needed
+};
