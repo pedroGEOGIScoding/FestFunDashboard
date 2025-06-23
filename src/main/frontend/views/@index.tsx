@@ -102,7 +102,7 @@ export default function DashboardView() {
     
     // Filter records for the specific bwId
     const selectedBwIdRecords = records.filter(record => 
-      record.data?.bwId && record.data.bwId.includes(bwId)
+      record.data?.bwId && record.data.bwId.split('#')[0] === bwId
     );
     
     if (selectedBwIdRecords.length === 0) {
@@ -116,34 +116,42 @@ export default function DashboardView() {
     );
     
     // Group by zone
-    const zoneGroups = new Map<string, { entries: EventRecord[], lastEntry?: EventRecord, totalTime: number, transitions: number }>();
+    const zoneGroups = new Map<string, { entries: EventRecord[], totalTime: number, visits: number }>();
     
     // Known zone types
     const knownZones = ['zone#00#VENUE', 'zone#01#BACKSTAGE', 'zone#01#01#BACKSTAGE#STAGE'];
     knownZones.forEach(zone => {
-      zoneGroups.set(zone, { entries: [], totalTime: 0, transitions: 0 });
+      zoneGroups.set(zone, { entries: [], totalTime: 0, visits: 0 });
     });
     
+    // Count zone visits by looking at each record
+    sortedRecords.forEach(record => {
+      const currentZone = record.data?.currentZone;
+      if (!currentZone) return;
+      
+      // Make sure we have an entry for this zone
+      if (!zoneGroups.has(currentZone)) {
+        zoneGroups.set(currentZone, { entries: [], totalTime: 0, visits: 0 });
+      }
+      
+      // Add record to the zone's entries and count it as a visit
+      const zoneInfo = zoneGroups.get(currentZone);
+      if (zoneInfo) {
+        zoneInfo.entries.push(record);
+        zoneInfo.visits += 1;
+      }
+    });
+    
+    // Calculate time spent in each zone
     let lastZone: string | undefined = undefined;
     let lastTimestamp: number | undefined = undefined;
     
-    // Process records to identify zone transitions and calculate time spent
+    // Process records to calculate time spent in each zone
     sortedRecords.forEach(record => {
       const currentZone = record.data?.currentZone;
       const currentTimestamp = record.data?.timestamp;
       
       if (!currentZone || !currentTimestamp) return;
-      
-      // Initialize the zone group if it doesn't exist
-      if (!zoneGroups.has(currentZone)) {
-        zoneGroups.set(currentZone, { entries: [], totalTime: 0, transitions: 0 });
-      }
-      
-      const zoneInfo = zoneGroups.get(currentZone);
-      if (!zoneInfo) return;
-      
-      // Add record to the zone's entries
-      zoneInfo.entries.push(record);
       
       // If we had a previous record in a different zone, calculate time difference
       if (lastZone && lastTimestamp && lastZone !== currentZone) {
@@ -151,13 +159,7 @@ export default function DashboardView() {
         if (previousZoneInfo) {
           const timeDiff = currentTimestamp - lastTimestamp;
           previousZoneInfo.totalTime += timeDiff;
-          previousZoneInfo.transitions += 1;
         }
-      }
-      
-      // If this is the first entry for this zone, count it as a transition
-      if (zoneInfo.entries.length === 1) {
-        zoneInfo.transitions += 1;
       }
       
       lastZone = currentZone;
@@ -166,13 +168,17 @@ export default function DashboardView() {
     
     // Convert map to array of zone time stats
     const stats: ZoneTimeStats[] = Array.from(zoneGroups.entries())
-      .filter(([_, info]) => info.entries.length > 0)
+      .filter(([_, info]) => info.visits > 0) // Only include zones that were visited
       .map(([zoneName, info]) => ({
         zoneName,
         totalTimeMs: info.totalTime,
-        visits: info.transitions,
-        averageTimeMs: info.transitions > 0 ? info.totalTime / info.transitions : 0
+        visits: info.visits,
+        averageTimeMs: info.visits > 0 ? info.totalTime / info.visits : 0
       }));
+    
+    // Verify the total count matches
+    const totalVisits = stats.reduce((sum, zone) => sum + zone.visits, 0);
+    console.log(`Total records: ${sortedRecords.length}, Sum of visits: ${totalVisits}`);
     
     setZoneTimeStats(stats);
     setSelectedBwId(bwId);

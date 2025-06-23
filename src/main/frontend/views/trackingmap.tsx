@@ -1,6 +1,25 @@
 import { ViewConfig } from '@vaadin/hilla-file-router/types.js';
 import React, { useState, useEffect, useRef } from 'react';
 import { EventRecordEndpoint } from 'Frontend/generated/endpoints.js';
+import 'leaflet/dist/leaflet.css';
+
+// Extend the Leaflet types to include our custom properties
+declare global {
+  interface Window {
+    L: any;
+  }
+  
+  namespace L {
+    interface MarkerOptions {
+      bwId?: string;
+      sequenceNumber?: number;
+    }
+
+    interface Marker {
+      getElement(): HTMLElement;
+    }
+  }
+}
 
 export const config: ViewConfig = {
   menu: { order: 1, icon: 'line-awesome/svg/map-marked-alt-solid.svg' },
@@ -13,19 +32,6 @@ const basemapOptions = [
   { id: 'satellite', name: 'Satellite (ESRI)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community' },
   { id: 'googlesat', name: 'Google Satellite Hybrid', url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', attribution: 'Map data &copy; Google' }
 ];
-
-declare global {
-  interface Window {
-    L: any;
-  }
-  
-  namespace L {
-    interface MarkerOptions {
-      bwId?: string;
-      sequenceNumber?: number;
-    }
-  }
-}
 
 const TrackingmapView: React.FC = function () {
   const [latitude, setLatitude] = useState('41.368918');
@@ -60,7 +66,7 @@ const TrackingmapView: React.FC = function () {
     }, 1000);
 
     const initMap = () => {
-      const mapContainer = document.getElementById('map-container');
+      const mapContainer = document.getElementById('map');
       
       if (!mapContainer) {
         console.error('Map container not found');
@@ -82,7 +88,7 @@ const TrackingmapView: React.FC = function () {
         mapContainer.style.position = 'relative';
         
         // Initialize map with specified options
-        const map = L.map('map-container', {
+        const map = L.map('map', {
           center: [41.368918, 2.147618],
           zoom: 20,
           zoomControl: true,
@@ -434,202 +440,160 @@ const TrackingmapView: React.FC = function () {
   return (
     <div style={{ 
       padding: '0', 
-      display: 'flex', 
-      flexDirection: 'column', 
       height: '100%',
       width: '100%',
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0
+      display: 'flex',
+      flexDirection: 'column',
+      position: 'relative'
     }}>
-      <div style={{
-        position: 'absolute',
-        bottom: '120px', 
-        left: '60px', 
-        zIndex: 1000,
-        backgroundColor: 'white',
-        padding: '10px',
-        borderRadius: '4px',
-        boxShadow: '0 1px 5px rgba(0,0,0,0.4)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '5px'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <label htmlFor="latitude" style={{ fontSize: '12px' }}>Lat:</label>
-          <input
-            id="latitude"
-            type="number"
-            value={latitude}
-            onChange={(e) => setLatitude(e.target.value)}
-            style={{
-              width: '100px',
-              padding: '4px',
-              fontSize: '12px',
-              border: '1px solid #ccc'
-            }}
-            step="0.000001"
-            min="-90"
-            max="90"
-          />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <label htmlFor="longitude" style={{ fontSize: '12px' }}>Lng:</label>
-          <input
-            id="longitude"
-            type="number"
-            value={longitude}
-            onChange={(e) => setLongitude(e.target.value)}
-            style={{
-              width: '100px',
-              padding: '4px',
-              fontSize: '12px',
-              border: '1px solid #ccc'
-            }}
-            step="0.000001"
-            min="-180"
-            max="180"
-          />
-        </div>
-        <button
-          onClick={handleRelocate}
-          style={{
-            padding: '4px 8px',
-            backgroundColor: '#0078FF',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '12px'
-          }}
-        >
-          Go to Location
-        </button>
-
-        <div style={{ marginTop: '5px' }}>
-          <label htmlFor="basemap-select" style={{ fontSize: '12px', display: 'block', marginBottom: '3px' }}>
-            Basemap:
-          </label>
-          <select
-            id="basemap-select"
-            value={selectedBasemap}
-            onChange={handleBasemapChange}
-            style={{
-              width: '100%',
-              padding: '4px',
-              fontSize: '12px',
-              border: '1px solid #ccc',
-              borderRadius: '3px',
-              backgroundColor: 'white'
-            }}
-          >
-            {basemapOptions.map(option => (
-              <option key={option.id} value={option.id}>
-                {option.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        
-        <div style={{ marginTop: '5px' }}>
-          <label htmlFor="bwid-select" style={{ fontSize: '12px', display: 'block', marginBottom: '3px' }}>
-            Filter by BW ID:
-          </label>
-          <select
-            id="bwid-select"
-            value={selectedBwId}
-            onChange={handleBwIdSelection}
-            style={{
-              width: '100%',
-              padding: '4px',
-              fontSize: '12px',
-              border: '1px solid #ccc',
-              borderRadius: '3px',
-              backgroundColor: 'white'
-            }}
-          >
-            <option value="">Show All</option>
-            {uniqueBwIds.map(bwId => (
-              <option key={bwId} value={bwId} style={{color: bwIdColorMap[bwId]}}>
-                {bwId}
-              </option>
-            ))}
-          </select>
-        </div>
-        
-        <button
-          onClick={loadMapMarkers}
-          style={{
-            marginTop: '5px',
-            padding: '4px 8px',
-            backgroundColor: '#28a745',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '12px'
-          }}
-        >
-          Refresh Markers
-        </button>
-        
-        <div style={{ 
-          marginTop: '5px', 
-          fontSize: '11px', 
-          textAlign: 'center',
-          padding: '3px',
-          backgroundColor: '#f8f9fa',
-          borderRadius: '3px'
+      <div id="map" style={{ height: '100%', width: '100%', position: 'relative' }}>
+        <div style={{
+          position: 'absolute',
+          bottom: '120px', 
+          left: '60px', 
+          zIndex: 1000,
+          backgroundColor: 'white',
+          padding: '10px',
+          borderRadius: '4px',
+          boxShadow: '0 1px 5px rgba(0,0,0,0.4)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '5px'
         }}>
-          {loading ? 'Loading...' : 
-            selectedBwId ? 
-              `${filteredMarkerCount} of ${markerCount} points shown • ${uniqueBwIds.length} unique BW IDs` :
-              `${markerCount} points shown • ${uniqueBwIds.length} unique BW IDs`
-          }
-        </div>
-        
-        {uniqueBwIds.length > 0 && (
-          <div style={{
-            marginTop: '8px',
-            fontSize: '11px',
-            maxHeight: '150px',
-            overflow: 'auto',
-            border: '1px solid #eee',
-            borderRadius: '3px',
-            padding: '5px'
-          }}>
-            <div style={{ fontWeight: 'bold', marginBottom: '3px' }}>BW ID Legend:</div>
-            {uniqueBwIds.map(bwId => (
-              <div key={bwId} style={{ display: 'flex', alignItems: 'center', marginBottom: '2px' }}>
-                <div style={{
-                  width: '10px',
-                  height: '10px',
-                  backgroundColor: bwIdColorMap[bwId],
-                  borderRadius: '50%',
-                  marginRight: '5px'
-                }}></div>
-                <span style={{ fontSize: '10px', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                  {bwId}
-                </span>
-              </div>
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <label htmlFor="latitude" style={{ fontSize: '12px' }}>Lat:</label>
+            <input
+              id="latitude"
+              type="number"
+              value={latitude}
+              onChange={(e) => setLatitude(e.target.value)}
+              style={{
+                width: '100px',
+                padding: '4px',
+                fontSize: '12px',
+                border: '1px solid #ccc'
+              }}
+              step="0.000001"
+              min="-90"
+              max="90"
+            />
           </div>
-        )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <label htmlFor="longitude" style={{ fontSize: '12px' }}>Lng:</label>
+            <input
+              id="longitude"
+              type="number"
+              value={longitude}
+              onChange={(e) => setLongitude(e.target.value)}
+              style={{
+                width: '100px',
+                padding: '4px',
+                fontSize: '12px',
+                border: '1px solid #ccc'
+              }}
+              step="0.000001"
+              min="-180"
+              max="180"
+            />
+          </div>
+          <button
+            onClick={handleRelocate}
+            style={{
+              padding: '4px 8px',
+              backgroundColor: '#0078FF',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            Go to Location
+          </button>
+
+          <div style={{ marginTop: '5px' }}>
+            <label htmlFor="basemap-select" style={{ fontSize: '12px', display: 'block', marginBottom: '3px' }}>
+              Basemap:
+            </label>
+            <select
+              id="basemap-select"
+              value={selectedBasemap}
+              onChange={handleBasemapChange}
+              style={{
+                width: '100%',
+                padding: '4px',
+                fontSize: '12px',
+                border: '1px solid #ccc',
+                borderRadius: '3px',
+                backgroundColor: 'white'
+              }}
+            >
+              {basemapOptions.map(option => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          <div style={{ marginTop: '5px' }}>
+            <label htmlFor="bwid-select" style={{ fontSize: '12px', display: 'block', marginBottom: '3px' }}>
+              Filter by BW ID:
+            </label>
+            <select
+              id="bwid-select"
+              value={selectedBwId}
+              onChange={handleBwIdSelection}
+              style={{
+                width: '100%',
+                padding: '4px',
+                fontSize: '12px',
+                border: '1px solid #ccc',
+                borderRadius: '3px',
+                backgroundColor: 'white'
+              }}
+            >
+              <option value="">Show All</option>
+              {uniqueBwIds.map(bwId => (
+                <option key={bwId} value={bwId} style={{color: bwIdColorMap[bwId]}}>
+                  {bwId}
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          <button
+            onClick={loadMapMarkers}
+            style={{
+              marginTop: '5px',
+              padding: '4px 8px',
+              backgroundColor: '#28a745',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            Refresh Markers
+          </button>
+          
+          <div style={{ 
+            marginTop: '5px', 
+            fontSize: '11px', 
+            textAlign: 'center',
+            padding: '3px',
+            backgroundColor: '#f8f9fa',
+            borderRadius: '3px'
+          }}>
+            {loading ? 'Loading...' : 
+              selectedBwId ? 
+                `${filteredMarkerCount} of ${markerCount} points shown • ${uniqueBwIds.length} unique BW IDs` :
+                `${markerCount} points shown • ${uniqueBwIds.length} unique BW IDs`
+            }
+          </div>
+        </div>
       </div>
-      
-      <div 
-        id="map-container" 
-        style={{ 
-          height: '100%', 
-          width: '100%', 
-          border: '1px solid #ccc',
-          position: 'relative',
-          zIndex: 0,
-          flex: 1
-        }}
-      ></div>
     </div>
   );
 };
