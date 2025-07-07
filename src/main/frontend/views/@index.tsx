@@ -381,7 +381,7 @@ export default function DashboardView() {
     setFilteredRecords(sortedFiltered);
     processBwIdStats(filtered);
     calculateZoneTimeStats(eventRecords, filterBwId);
-    calculateOverallZoneTimeStats(filtered);
+    calculateOverallZoneTimeStats(eventRecords);
     Notification.show(`Found ${filtered.length} events with Wristband ID containing: ${filterBwId}`,
       { position: 'bottom-center', duration: 3000 });
   };
@@ -407,7 +407,7 @@ export default function DashboardView() {
         setFilteredRecords(sortedFiltered);
         processBwIdStats(filtered);
         calculateZoneTimeStats(events, filterBwId);
-        calculateOverallZoneTimeStats(filtered);
+        calculateOverallZoneTimeStats(events);
         Notification.show(
           `Found ${filtered.length} events for Event ID: ${filterEventId} with Wristband ID containing: ${filterBwId}`,
           { position: 'bottom-center', duration: 3000 }
@@ -563,12 +563,12 @@ export default function DashboardView() {
             label="Insert Wristband ID"
             value={filterBwId}
             onChange={(e) => setFilterBwId(e.target.value)}
-            placeholder="Enter bwId to filter" style={{width: '220px'}}
+            placeholder="Enter Wristband Id to filter" style={{width: '220px'}}
           />
           
           <div className="flex items-end gap-2">
             <Button theme="primary" onClick={fetchAllEvents}>
-              Load All
+              Load All Operations
             </Button>
             
             <Button theme="secondary" onClick={loadEventsByEventId}>
@@ -576,7 +576,7 @@ export default function DashboardView() {
             </Button>
             
             <Button theme="secondary" onClick={filterEventsByBwId}>
-              Filter by bwId
+              Filter by Wristband Id
             </Button>
             
             <Button theme="secondary" onClick={loadEventsByEventIdAndFilterBwId}>
