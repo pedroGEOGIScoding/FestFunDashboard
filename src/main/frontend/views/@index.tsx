@@ -57,7 +57,7 @@ export default function DashboardView() {
   const [loading, setLoading] = useState<boolean>(false);
   const [bwIdStats, setBwIdStats] = useState<BwIdStats[]>([]);
   const [totalBwIds, setTotalBwIds] = useState<number>(0);
-  const [displayMode, setDisplayMode] = useState<'top5' | 'all'>('top5');
+  const [displayMode, setDisplayMode] = useState<'top10' | 'all'>('top10');
   const [zoneTimeStats, setZoneTimeStats] = useState<ZoneTimeStats[]>([]);
   const [overallZoneTimeStats, setOverallZoneTimeStats] = useState<ZoneTimeStats[]>([]);
   const [selectedBwId, setSelectedBwId] = useState<string>('');
@@ -469,9 +469,9 @@ export default function DashboardView() {
                 <Select
                   className="min-w-[80px]"
                   value={displayMode}
-                  onChange={(e) => setDisplayMode(e.target.value as 'top5' | 'all')}
+                  onChange={(e) => setDisplayMode(e.target.value as 'top10' | 'all')}
                   items={[
-                    { label: 'Top 5', value: 'top5' },
+                    { label: 'Top 10', value: 'top10' },
                     { label: 'All', value: 'all' }
                   ]}
                 />
@@ -504,7 +504,7 @@ export default function DashboardView() {
           )}
 
           <div className="grid gap-4">
-            {(displayMode === 'top5' ? bwIdStats.slice(0, 5) : bwIdStats).map((stat, index) => (
+            {(displayMode === 'top10' ? bwIdStats.slice(0, 10) : bwIdStats).map((stat, index) => (
               <div key={index} className="mb-2">
                 <div className="flex justify-between mb-1">
                   <span className="font-medium" title={stat.id}>{stat.id}</span>
